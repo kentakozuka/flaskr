@@ -161,4 +161,50 @@ class AuthActions(object):
         return self._client.get('/logout', follow_redirects=True)
 
 
+class TestRemoveEntry:
+    
+    def test_remove_entry_logged_in(self):
+        """
+        Test that a logged-in user can remove an entry.
+        """
+        with app.test_client() as client:
+            # Login
+            auth = AuthActions(client)
+            auth.login()
+            
+            # Add an entry
+            client.post('/add', data={
+                'title': 'Test Entry',
+                'text': 'This is a test entry to be removed'
+            }, follow_redirects=True)
+            
+            # Get the entry ID
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE title = ?', 
+                                  ['Test Entry']).fetchone()
+                
+                if entry:
+                    # Remove the entry
+                    response = client.post(f'/remove/{entry["id"]}', follow_redirects=True)
+                    
+                    # Check if the entry was removed
+                    assert b'Entry was successfully removed' in response.data
+                    
+                    # Verify the entry is no longer in the database
+                    check = db.execute('SELECT * FROM entries WHERE id = ?', 
+                                      [entry["id"]]).fetchone()
+                    assert check is None
+    
+    def test_remove_entry_not_logged_in(self):
+        """
+        Test that a user who is not logged in cannot remove an entry.
+        """
+        with app.test_client() as client:
+            # Try to remove an entry without logging in
+            response = client.post('/remove/1', follow_redirects=True)
+            
+            # Should get a 401 Unauthorized response
+            assert response.status_code == 401
+
 
